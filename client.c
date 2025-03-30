@@ -16,11 +16,10 @@
 
 #define PORT "3490" // the port client will be connecting to 
 
-#define MAXDATASIZE 100 // max number of bytes we can get at once 
+#define MAXDATASIZE 1024 // max number of bytes we can get at once 
 
 // get sockaddr, IPv4 or IPv6:
-void *get_in_addr(struct sockaddr *sa)
-{
+void *get_in_addr(struct sockaddr *sa) {
 	if (sa->sa_family == AF_INET) {
 		return &(((struct sockaddr_in*)sa)->sin_addr);
 	}
@@ -28,10 +27,39 @@ void *get_in_addr(struct sockaddr *sa)
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-int main(int argc, char *argv[])
-{
-	int sockfd, numbytes;  
-	char buf[MAXDATASIZE];
+// read input from console and send to server
+// keep waiting until the user exit
+void readInputAndSend(int sockfd) {
+	char *input = NULL;
+    size_t inputSize= 0;
+
+    printf("hello, what movie do you want to wacth today? \n");
+	printf("please, type your action and hit enter: \n");
+	printf("1 - insert a movie \n");
+	printf("2 - add a genre to a movie \n");
+	printf("3 - remove a movie \n");
+	printf("4 - insert a movie \n");
+	printf("5 - list all movies \n");
+	printf("6 - list all movies informations \n");
+	printf("7 - list information by movie \n");
+	printf("8 - list all movies from a genre \n");
+	printf("0 - exit \n");
+
+    while(1) {
+        ssize_t  charCount = getline(&input, &inputSize, stdin);
+        input[charCount-1] = 0;
+
+        if(charCount > 0) {
+            if(strcmp(input, "0") == 0)
+                break;
+
+            ssize_t amountWasSent =  send(sockfd, input, charCount, 0);
+        }
+    }
+}
+
+int main(int argc, char *argv[]) {
+	int sockfd;  
 	struct addrinfo hints, *servinfo, *p;
 	int rv;
 	char s[INET6_ADDRSTRLEN];
@@ -76,28 +104,9 @@ int main(int argc, char *argv[])
 			s, sizeof s);
 	printf("client: connecting to %s\n", s);
 
-	printf("Hello, do you want to register your wacthed movies? \n");
-	printf("Please, select your action: \n");
-	printf("1 - Insert a movie \n");
-	printf("2 - Add a genre to a movie \n");
-	printf("3 - Remove a movie \n");
-	printf("4 - Insert a movie \n");
-	printf("5 - List all movies \n");
-	printf("6 - List all movies informations \n");
-	printf("7 - List information by movie \n");
-	printf("8 - List all movies from a genre \n");
-	printf("9 - Close \n");
-
 	freeaddrinfo(servinfo); // all done with this structure
 
-	if ((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1) {
-	    perror("recv");
-	    exit(1);
-	}
-
-	buf[numbytes] = '\0';
-
-	printf("client: received '%s'\n",buf);
+	readInputAndSend(sockfd);
 
 	close(sockfd);
 

@@ -19,6 +19,8 @@
 
 #define BACKLOG 10	 // how many pending connections queue will hold
 
+#define MAXDATASIZE 1024 // max number of bytes we can get at once 
+
 void sigchld_handler(int s)
 {
 	(void)s; // quiet unused variable warning
@@ -42,8 +44,55 @@ void *get_in_addr(struct sockaddr *sa)
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-int main(void)
-{
+// switch between the existing options according client's choice
+void selectOption(char *option) {
+	if(strcmp(option, "1") == 0) {
+		printf("client selected option 1.\n");
+	} else if(strcmp(option, "2") == 0) {
+		printf("client selected option 2.\n");
+	} else if(strcmp(option, "3") == 0) {
+		printf("client selected option 3.\n");
+	} else if(strcmp(option, "4") == 0) {
+		printf("client selected option 4.\n");
+	} else if(strcmp(option, "5") == 0) {
+		printf("client selected option 5.\n");
+	} else if(strcmp(option, "6") == 0) {
+		printf("client selected option 6.\n");
+	} else if(strcmp(option, "7") == 0) {
+		printf("client selected option 7.\n");
+	} else if(strcmp(option, "8") == 0) {
+		printf("client selected option 8.\n");
+	} else {
+		printf("this option don't exist.\n");
+	}
+}
+
+// read response from client and keep wating until user exits
+void readResponse(int sockfd) {
+	int numbytes;
+	char buf[MAXDATASIZE];
+
+    while(1) {
+        if ((numbytes = recv(sockfd, buf, MAXDATASIZE - 1, 0)) == -1) {
+			perror("recv");
+			exit(1);
+		}
+
+		if (numbytes == 0) {
+			printf("server: client exited.\n");
+			break;
+		}
+	
+		buf[numbytes] = '\0'; // start string from begining
+	
+		selectOption(buf);
+    }
+
+	close(sockfd); // closing client socket
+    exit(0); // closing child process
+}
+
+int main(void) {
 	int sockfd, new_fd;  // listen on sock_fd, new connection on new_fd
 	struct addrinfo hints, *servinfo, *p;
 	struct sockaddr_storage their_addr; // connector's address information
@@ -123,10 +172,7 @@ int main(void)
 
 		if (!fork()) { // this is the child process
 			close(sockfd); // child doesn't need the listener
-			if (send(new_fd, "Hello, world!", 13, 0) == -1)
-				perror("send");
-			close(new_fd);
-			exit(0);
+			readResponse(new_fd);
 		}
 		close(new_fd);  // parent doesn't need this
 	}
