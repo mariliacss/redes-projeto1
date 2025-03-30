@@ -33,8 +33,8 @@ void readInputAndSend(int sockfd) {
 	char *input = NULL;
     size_t inputSize= 0;
 
-    printf("hello, what movie do you want to wacth today? \n");
-	printf("please, type your action and hit enter: \n");
+    printf("｡･:*˚:✧｡ hello, what movie do you want to wacth today? ｡･:*˚:✧｡\n\n");
+	printf("please, type your action and hit enter: \n\n");
 	printf("1 - insert a movie \n");
 	printf("2 - add a genre to a movie \n");
 	printf("3 - remove a movie \n");
