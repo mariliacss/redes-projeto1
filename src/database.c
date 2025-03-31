@@ -76,7 +76,7 @@ int connect_database(sqlite3 **db)
 {
     int rc;
 
-    rc = sqlite3_open("streaming.db", db);
+    rc = sqlite3_open("../src/streaming.db", db);
 
     if (rc)
     {
@@ -98,6 +98,7 @@ void exec_query(sqlite3 *db, char *sql)
     rc = sqlite3_exec(db, sql, callback, (void *)data, &zErrMsg);
 
     exec_error(rc, zErrMsg, "Operation done successfully");
+    // TODO: to list actions we need to return data with the results
 }
 
 void close_db(sqlite3 *db)
