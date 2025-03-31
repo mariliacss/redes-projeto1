@@ -14,8 +14,7 @@
 #include <arpa/inet.h>
 #include <sys/wait.h>
 #include <signal.h>
-#include <sqlite3.h>
-#include "database.h"
+#include "actions.h"
 
 #define PORT "3490"  // the port users will be connecting to
 
@@ -55,7 +54,7 @@ void selectOption(char *option) {
 	} else if(strcmp(option, "3") == 0) {
 		printf("client selected option 3.\n");
 	} else if(strcmp(option, "4") == 0) {
-		printf("client selected option 4.\n");
+		list_movies();
 	} else if(strcmp(option, "5") == 0) {
 		printf("client selected option 5.\n");
 	} else if(strcmp(option, "6") == 0) {

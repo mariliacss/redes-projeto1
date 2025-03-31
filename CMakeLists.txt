@@ -1,11 +1,15 @@
-cmake_minimum_required(VERSION 3.10)  # Define a versão mínima do CMake
-project(Streaming C)  # Nome do projeto e linguagem
+cmake_minimum_required(VERSION 3.10)
+project(Streaming C)
 
-# set(SOURCE_FILES src/main.c src/funcoes.c)  # Lista de arquivos fonte para fazer apenas um executável
-# add_executable(meu_programa ${SOURCE_FILES})  # Cria o executável
+# SQLite library
+find_package(SQLite3 REQUIRED)
 
-# faz o executável do servidor
-add_executable(server src/server.c)
+# server executable file
+set(SOURCE_FILES src/server.c src/actions.c src/database.c)
+add_executable(server ${SOURCE_FILES})
 
-# faz o executável do cliente
+# client executable file
 add_executable(client src/client.c)
+
+# adding SQLite to executable file
+target_link_libraries(server SQLite::SQLite3)
