@@ -38,11 +38,10 @@ void readInputAndSend(int sockfd) {
 	printf("1 - insert a movie \n");
 	printf("2 - add a genre to a movie \n");
 	printf("3 - remove a movie \n");
-	printf("4 - insert a movie \n");
-	printf("5 - list all movies \n");
-	printf("6 - list all movies informations \n");
-	printf("7 - list information by movie \n");
-	printf("8 - list all movies from a genre \n");
+	printf("4 - list all movies \n");
+	printf("5 - list all movies informations \n");
+	printf("6 - list information by movie \n");
+	printf("7 - list all movies from a genre \n");
 	printf("0 - exit \n");
 
     while(1) {
