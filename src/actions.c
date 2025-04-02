@@ -1,6 +1,14 @@
 #include <sqlite3.h>
 #include "database.h"
 
+void create_db() {
+	sqlite3 *db;
+	
+	connect_db(&db);
+	create_tables(db);
+	close_db(db);
+}
+
 void insert_movie() {
 
 }
@@ -19,7 +27,7 @@ void list_movies() {
 
 	sql = "SELECT TITLE FROM MOVIE";
 	
-	connect_database(&db);
+	connect_db(&db);
 	exec_query(db, sql);
 	close_db(db);
 }
@@ -30,7 +38,7 @@ void list_movies_info() {
 
 	sql = "SELECT * FROM MOVIE";
 	
-	connect_database(&db);
+	connect_db(&db);
 	// exec_query(db, sql);
 	close_db(db);
 }
@@ -41,7 +49,7 @@ void list_info_by_movie(int id) {
 
 	sql = "SELECT * FROM MOVIE WHERE ID_MOVIE = ";
 	
-	connect_database(&db);
+	connect_db(&db);
 	// exec_query(db, sql);
 	close_db(db);
 }

@@ -30,6 +30,8 @@ void exec_error(int rc, char *zErrMsg, char *sucessMessage)
     }
 }
 
+// inserir gêneros padrões para pessoa cadastrar
+
 void create_tables(sqlite3 *db)
 {
     char *zErrMsg = 0;
@@ -72,7 +74,7 @@ void create_tables(sqlite3 *db)
     exec_error(rc, zErrMsg, "Table MOVIE_GENRE created successfully");
 }
 
-int connect_database(sqlite3 **db)
+int connect_db(sqlite3 **db)
 {
     int rc;
 
