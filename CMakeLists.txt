@@ -5,8 +5,7 @@ project(Streaming C)
 find_package(SQLite3 REQUIRED)
 
 # server executable file
-set(SOURCE_FILES src/server.c src/actions.c src/database.c)
-add_executable(server ${SOURCE_FILES})
+add_executable(server src/server.c)
 
 # client executable file
 add_executable(client src/client.c)

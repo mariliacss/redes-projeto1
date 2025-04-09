@@ -32,6 +32,8 @@ void *get_in_addr(struct sockaddr *sa) {
 void readInputAndSend(int sockfd) {
 	char *input = NULL;
     size_t inputSize= 0;
+	int numbytes;
+	char buf[MAXDATASIZE];
 
     printf("｡･:*˚:✧｡ hello, what movie do you want to wacth today? ｡･:*˚:✧｡\n\n");
 	printf("please, type your action and hit enter: \n\n");
@@ -54,6 +56,14 @@ void readInputAndSend(int sockfd) {
 
             ssize_t amountWasSent =  send(sockfd, input, charCount, 0);
         }
+
+		if ((numbytes = recv(sockfd, buf, MAXDATASIZE - 1, 0)) == -1) {
+			perror("recv");
+			exit(1);
+		}
+
+		buf[numbytes] = '\0'; // start string from begining
+		printf("%s", buf);
     }
 }
 

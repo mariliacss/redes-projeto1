@@ -14,7 +14,7 @@
 #include <arpa/inet.h>
 #include <sys/wait.h>
 #include <signal.h>
-#include "actions.h"
+#include <sqlite3.h>
 
 #define PORT "3490"  // the port users will be connecting to
 
@@ -45,31 +45,50 @@ void *get_in_addr(struct sockaddr *sa)
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-// switch between the existing options according client's choice
-void selectOption(char *option) {
-	if(strcmp(option, "1") == 0) {
-		printf("client selected option 1.\n");
-	} else if(strcmp(option, "2") == 0) {
-		printf("client selected option 2.\n");
-	} else if(strcmp(option, "3") == 0) {
-		printf("client selected option 3.\n");
-	} else if(strcmp(option, "4") == 0) {
-		list_movies();
-	} else if(strcmp(option, "5") == 0) {
-		printf("client selected option 5.\n");
-	} else if(strcmp(option, "6") == 0) {
-		printf("client selected option 6.\n");
-	} else if(strcmp(option, "7") == 0) {
-		printf("client selected option 7.\n");
-	} else {
-		printf("this option don't exist.\n");
-	}
+// Función para enviar resultados al cliente
+void send_result(int client_sock, sqlite3 *db, const char *sql) {
+    sqlite3_stmt *stmt;
+    char buffer[MAXDATASIZE];
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        snprintf(buffer, MAXDATASIZE, "Error SQL: %s\n", sqlite3_errmsg(db));
+        send(client_sock, buffer, strlen(buffer), 0);
+        return;
+    }
+
+    int cols = sqlite3_column_count(stmt);
+
+    // Enviar cabecera (nombres de columnas)
+    buffer[0] = '\0';
+    for (int i = 0; i < cols; i++) {
+        strcat(buffer, sqlite3_column_name(stmt, i));
+        if (i < cols - 1) strcat(buffer, ",");
+    }
+    strcat(buffer, "\n");
+    send(client_sock, buffer, strlen(buffer), 0);
+
+    // Enviar filas de datos
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        buffer[0] = '\0';
+        for (int i = 0; i < cols; i++) {
+            const char *valor = (const char *)sqlite3_column_text(stmt, i);
+            strcat(buffer, valor ? valor : "NULL");
+            if (i < cols - 1) strcat(buffer, ",");
+        }
+        strcat(buffer, "\n");
+        send(client_sock, buffer, strlen(buffer), 0);
+    }
+
+    sqlite3_finalize(stmt);
 }
 
 // read response from client and keep wating until user exits
-void readResponse(int sockfd) {
+void read_response(int sockfd, sqlite3 *db) {
 	int numbytes;
 	char buf[MAXDATASIZE];
+
+	char *zErrMsg = 0;
+    char *sql;
 
     while(1) {
         if ((numbytes = recv(sockfd, buf, MAXDATASIZE - 1, 0)) == -1) {
@@ -84,11 +103,113 @@ void readResponse(int sockfd) {
 	
 		buf[numbytes] = '\0'; // start string from begining
 	
-		selectOption(buf);
+		if(strcmp(buf, "1") == 0) {
+			// selecione o ID de um dos gêneros a seguir
+			// enviar o select de gênero
+			send_result(sockfd, db, "SELECT name FROM genres");
+			// escreva as informações do filme em uma linha separando por vírgula
+			// nome do filme,diretor,gênero,ano de lançamento
+			// faz o buffer para receber a linha
+			// separa os nomes e adiciona o filme
+			// depois relaciona o filme com o gênero
+			sprintf(sql, "INSERT INTO movies (movie_id,title,director,year) VALUES (%d, %s, %s, %d');");
+
+			if (sqlite3_exec(db, sql, callback, 0, &zErrMsg) != SQLITE_OK) {
+				fprintf(stderr, "SQL error: %s\n", zErrMsg);
+				sqlite3_free(zErrMsg);
+			} else {
+				fprintf(stdout, "%s\n", "Table genres created successfully");
+			}
+
+			sprintf(sql, "INSERT INTO movies_genres (movie_genre_id,genre_id,movie_id) VALUES (%d, %d');");
+
+			if (sqlite3_exec(db, sql, callback, 0, &zErrMsg) != SQLITE_OK) {
+				fprintf(stderr, "SQL error: %s\n", zErrMsg);
+				sqlite3_free(zErrMsg);
+			} else {
+				fprintf(stdout, "%s\n", "Table genres created successfully");
+			}
+
+		} else if(strcmp(buf, "2") == 0) {
+			printf("client selected option 2.\n");
+		} else if(strcmp(buf, "3") == 0) {
+			printf("client selected option 3.\n");
+		} else if(strcmp(buf, "4") == 0) {
+			send_result(sockfd, db, "SELECT TITLE FROM MOVIE");
+		} else if(strcmp(buf, "5") == 0) {
+			printf("client selected option 5.\n");
+		} else if(strcmp(buf, "6") == 0) {
+			printf("client selected option 6.\n");
+		} else if(strcmp(buf, "7") == 0) {
+			printf("client selected option 7.\n");
+		} else {
+			printf("this option don't exist.\n");
+		}
     }
 
 	close(sockfd); // closing client socket
     exit(0); // closing child process
+}
+
+static int callback(void *data, int argc, char **argv, char **azColName) {
+    int i;
+    fprintf(stderr, "%s: ", (const char *)data);
+
+    for (i = 0; i < argc; i++) {
+        printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
+    }
+
+    printf("\n");
+    return 0;
+}
+
+void create_tables(sqlite3 *db) {
+    char *zErrMsg = 0;
+    char *sql;
+
+    /* Create SQL statement for genre table */
+    sql = "CREATE TABLE IF NOT EXISTS genres("
+          "genre_id INT PRIMARY KEY     NOT NULL,"
+          "name           TEXT    NOT NULL);";
+
+    /* Execute SQL statement */
+    if (sqlite3_exec(db, sql, callback, 0, &zErrMsg) != SQLITE_OK) {
+        fprintf(stderr, "SQL error: %s\n", zErrMsg);
+        sqlite3_free(zErrMsg);
+    } else {
+        fprintf(stdout, "%s\n", "Table genres created successfully");
+    }
+
+    /* Create SQL statement for movie table */
+    sql = "CREATE TABLE IF NOT EXISTS movies("
+          "movie_id INT PRIMARY KEY     NOT NULL,"
+          "title           TEXT    NOT NULL,"
+          "director        TEXT NOT NULL,"
+          "year         INT NOT NULL );";
+
+    /* Execute SQL statement */
+    if (sqlite3_exec(db, sql, callback, 0, &zErrMsg) != SQLITE_OK) {
+        fprintf(stderr, "SQL error: %s\n", zErrMsg);
+        sqlite3_free(zErrMsg);
+    } else {
+        fprintf(stdout, "%s\n", "Table movies created successfully");
+    }
+
+    /* Create SQL statement for movie genre relationship table */
+    sql = "CREATE TABLE IF NOT EXISTS movies_genres("
+          "movie_genre_id INT PRIMARY KEY     NOT NULL,"
+          "genre_id           INT    NOT NULL,"
+          "movie_id        INT NOT NULL,"
+          "FOREIGN KEY (genre_id) REFERENCES GENRE(genre_id) ON DELETE CASCADE,"
+          "FOREIGN KEY (movie_id) REFERENCES MOVIE(movie_id) ON DELETE CASCADE );";
+
+    /* Execute SQL statement */
+    if (sqlite3_exec(db, sql, callback, 0, &zErrMsg) != SQLITE_OK) {
+        fprintf(stderr, "SQL error: %s\n", zErrMsg);
+        sqlite3_free(zErrMsg);
+    } else {
+        fprintf(stdout, "%s\n", "Table movies_genres created successfully");
+    }
 }
 
 int main(void) {
@@ -100,6 +221,7 @@ int main(void) {
 	int yes=1;
 	char s[INET6_ADDRSTRLEN];
 	int rv;
+	sqlite3 *db;
 
 	memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_UNSPEC;
@@ -156,7 +278,14 @@ int main(void) {
 
 	printf("server: waiting for connections...\n");
 
-	create_db();
+    if (sqlite3_open("streaming.db", &db) != SQLITE_OK) {
+        fprintf(stderr, "Error open database: %s\n", sqlite3_errmsg(db));
+        return 1;
+    } else {
+        fprintf(stderr, "Opened database successfully\n");
+    }
+
+	create_tables(db);
 
 	while(1) {  // main accept() loop
 		sin_size = sizeof their_addr;
@@ -173,10 +302,12 @@ int main(void) {
 
 		if (!fork()) { // this is the child process
 			close(sockfd); // child doesn't need the listener
-			readResponse(new_fd);
+			read_response(new_fd, db);
 		}
 		close(new_fd);  // parent doesn't need this
 	}
+
+	sqlite3_close(db);
 
 	return 0;
 }
