@@ -29,12 +29,7 @@ void *get_in_addr(struct sockaddr *sa) {
 
 // read input from console and send to server
 // keep waiting until the user exit
-void readInputAndSend(int sockfd) {
-	char *input = NULL;
-    size_t inputSize= 0;
-	int numbytes;
-	char buf[MAXDATASIZE];
-
+void read_and_send_response(int sockfd) {
     printf("｡･:*˚:✧｡ hello, what movie do you want to wacth today? ｡･:*˚:✧｡\n\n");
 	printf("please, type your action and hit enter: \n\n");
 	printf("1 - insert a movie \n");
@@ -46,24 +41,35 @@ void readInputAndSend(int sockfd) {
 	printf("7 - list all movies from a genre \n");
 	printf("0 - exit \n");
 
+	int numbytes;
+	char buffer[MAXDATASIZE];
+	char resultado[8192];
+
     while(1) {
-        ssize_t  charCount = getline(&input, &inputSize, stdin);
-        input[charCount-1] = 0;
-
-        if(charCount > 0) {
-            if(strcmp(input, "0") == 0)
-                break;
-
-            ssize_t amountWasSent =  send(sockfd, input, charCount, 0);
-        }
-
-		if ((numbytes = recv(sockfd, buf, MAXDATASIZE - 1, 0)) == -1) {
-			perror("recv");
-			exit(1);
+		// primeiro lê o que foi digitado no terminal e envia se não for zero
+		// eu preciso criar um protocolo para saber qual o final da mensagem
+		// e o cliente precisa ficar recebendo até que seja o final
+		fgets(buffer, MAXDATASIZE, stdin);
+		buffer[strcspn(buffer, "\n")] = 0;
+		if (strcmp(buffer, "0") == 0) {
+			break;
+		}
+		if (send(sockfd, buffer, strlen(buffer), 0) == -1) {
+			perror("send");
 		}
 
-		buf[numbytes] = '\0'; // start string from begining
-		printf("%s", buf);
+		memset(buffer, 0, MAXDATASIZE); // zera o buffer
+
+		// depois recebe a resposta do servidor
+		while ((numbytes = recv(sockfd, buffer, sizeof(buffer) - 1, 0)) > 0) {
+			buffer[numbytes] = '\0';
+			if (strcmp(buffer, "END\n") == 0) {
+				break;  // achou o fim
+			}
+			strcat(resultado, buffer);
+		}
+
+		printf("%s", resultado);
     }
 }
 
@@ -115,7 +121,7 @@ int main(int argc, char *argv[]) {
 
 	freeaddrinfo(servinfo); // all done with this structure
 
-	readInputAndSend(sockfd);
+	read_and_send_response(sockfd);
 
 	close(sockfd);
 
