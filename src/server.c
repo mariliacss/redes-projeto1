@@ -45,51 +45,13 @@ void *get_in_addr(struct sockaddr *sa)
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-// Función para enviar resultados al cliente
-void send_result(int client_sock, sqlite3 *db, const char *sql) {
-    sqlite3_stmt *stmt;
-    char buffer[MAXDATASIZE];
-
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
-        snprintf(buffer, MAXDATASIZE, "Error SQL: %s\n", sqlite3_errmsg(db));
-        send(client_sock, buffer, strlen(buffer), 0);
-        return;
-    }
-
-    int cols = sqlite3_column_count(stmt);
-
-    // Enviar filas de datos
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
-        buffer[0] = '\0';
-        for (int i = 0; i < cols; i++) {
-            const char *valor = (const char *)sqlite3_column_text(stmt, i);
-            strcat(buffer, valor ? valor : "NULL");
-            if (i < cols - 1) strcat(buffer, ",");
-        }
-        strcat(buffer, "\n");
-		printf("%s", buffer);
-		if (send(client_sock, buffer, strlen(buffer), 0) == -1) {
-			perror("send");
-		}
-    }
-
-	// envia marcador de fim
-	char *end_message = "END\n";
-	send(client_sock, end_message, strlen(end_message), 0);
-
-    sqlite3_finalize(stmt);
-}
-
 // read response from client and keep wating until user exits
-void read_response(int sockfd, sqlite3 *db) {
+void read_response(int sockfd) {
 	int numbytes;
-	char buffer[MAXDATASIZE];
-	char *zErrMsg = 0;
-    char *sql;
+	char buf[MAXDATASIZE];
 
     while(1) {
-		memset(buffer, 0, MAXDATASIZE);
-        if ((numbytes = recv(sockfd, buffer, MAXDATASIZE-1, 0)) == -1) {
+        if ((numbytes = recv(sockfd, buf, MAXDATASIZE - 1, 0)) == -1) {
 			perror("recv");
 			exit(1);
 		}
@@ -99,56 +61,19 @@ void read_response(int sockfd, sqlite3 *db) {
 			break;
 		}
 	
-		buffer[numbytes] = '\0';
-
-		printf("Cliente: %s\n", buffer);
-
-		if(strcmp(buffer, "1") == 0) {
-			// char *message = "escreva as informações do filme em uma linha separando por vírgula da seguinte forma:\n"
-			// "nome do filme,diretor,número do gênero,ano de lançamento\n"
-			// "exemplo: Viagem de Chihiro,Hayao Miyazaki,1,2001\n"
-			// "escolha o gênero a partir da lista a seguir (insira o número conforme o exemplo)\n";
-			// selecione o ID de um dos gêneros a seguir
-			// send(sockfd, message, strlen(message), 0);
-			// enviar o select de gênero
-			send_result(sockfd, db, "SELECT * FROM genres");
-			// escreva as informações do filme em uma linha separando por vírgula
-			// nome do filme,diretor,gênero,ano de lançamento
-			// faz o buffer para receber a linha
-			// separa os nomes e adiciona o filme
-			// depois relaciona o filme com o gênero
-			// sprintf(sql, "INSERT INTO movies (movie_id,title,director,year) VALUES (%d, %s, %s, %d');");
-
-			// if (sqlite3_exec(db, sql, NULL, 0, &zErrMsg) != SQLITE_OK) {
-			// 	fprintf(stderr, "SQL error: %s\n", zErrMsg);
-			// 	sqlite3_free(zErrMsg);
-			// } else {
-			// 	fprintf(stdout, "%s\n", "Table genres created successfully");
-			// }
-
-			// sprintf(sql, "INSERT INTO movies_genres (movie_genre_id,genre_id,movie_id) VALUES (%d, %d');");
-
-			// if (sqlite3_exec(db, sql, NULL, 0, &zErrMsg) != SQLITE_OK) {
-			// 	fprintf(stderr, "SQL error: %s\n", zErrMsg);
-			// 	sqlite3_free(zErrMsg);
-			// } else {
-			// 	fprintf(stdout, "%s\n", "Table genres created successfully");
-			// }
-
-		} else if(strcmp(buffer, "2") == 0) {
-			printf("client selected option 2.\n");
-		} else if(strcmp(buffer, "3") == 0) {
-			printf("client selected option 3.\n");
-		} else if(strcmp(buffer, "4") == 0) {
-			send_result(sockfd, db, "SELECT title FROM movies");
-		} else if(strcmp(buffer, "5") == 0) {
-			printf("client selected option 5.\n");
-		} else if(strcmp(buffer, "6") == 0) {
-			printf("client selected option 6.\n");
-		} else if(strcmp(buffer, "7") == 0) {
-			printf("client selected option 7.\n");
-		} else {
-			printf("this option don't exist.\n");
+		buf[numbytes] = '\0'; // start string from begining
+	
+		int op = atoi(buf);
+		switch(op) {
+			case 1: printf("opção 1\n"); break;
+			case 2: printf("opção 2\n"); break;
+			case 3: printf("opção 3\n"); break;
+			case 4: printf("opção 4\n"); break;
+			case 5: printf("opção 5\n"); break;
+			case 6: printf("opção 6\n"); break;
+			case 7: printf("opção 7\n"); break;
+			case 8: printf("opção 8\n"); break;
+			default: printf("opção inexistente\n"); break;
 		}
     }
 
@@ -250,6 +175,18 @@ int main(void) {
 	int rv;
 	sqlite3 *db;
 
+	// conectando com o banco de dados
+	if (sqlite3_open("streaming.db", &db) != SQLITE_OK) {
+        fprintf(stderr, "Error open database: %s\n", sqlite3_errmsg(db));
+        return 1;
+    } else {
+        fprintf(stderr, "Opened database successfully\n");
+    }
+
+	// criando tabelas e inserindo dados de Gênero caso não existam
+	create_tables(db);
+	insert_genres(db);
+
 	memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
@@ -305,16 +242,6 @@ int main(void) {
 
 	printf("server: waiting for connections...\n");
 
-    if (sqlite3_open("streaming.db", &db) != SQLITE_OK) {
-        fprintf(stderr, "Error open database: %s\n", sqlite3_errmsg(db));
-        return 1;
-    } else {
-        fprintf(stderr, "Opened database successfully\n");
-    }
-
-	create_tables(db);
-	insert_genres(db);
-
 	while(1) {  // main accept() loop
 		sin_size = sizeof their_addr;
 		new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
@@ -330,7 +257,7 @@ int main(void) {
 
 		if (!fork()) { // this is the child process
 			close(sockfd); // child doesn't need the listener
-			read_response(new_fd, db);
+			read_response(new_fd);
 		}
 		close(new_fd);  // parent doesn't need this
 	}
