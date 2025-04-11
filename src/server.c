@@ -47,26 +47,42 @@ void *get_in_addr(struct sockaddr *sa)
 
 // read response from client and keep wating until user exits
 void read_response(int sockfd) {
-	int numbytes;
 	char buf[MAXDATASIZE];
 
     while(1) {
-        if ((numbytes = recv(sockfd, buf, MAXDATASIZE - 1, 0)) == -1) {
+		ssize_t amountReceived = recv(sockfd, buf, MAXDATASIZE, 0);
+
+        if (amountReceived == -1) {
 			perror("recv");
 			exit(1);
 		}
 
-		if (numbytes == 0) {
+		if (amountReceived == 0) {
 			printf("server: client exited.\n");
 			break;
 		}
-	
-		buf[numbytes] = '\0'; // start string from begining
-	
+
+		buf[amountReceived] = '\0'; // start string from begining
+
 		int op = atoi(buf);
+		char *message;
+		char *end_message = "END\n";
+
+		sprintf(message, "Opção %s escolhida", buf);
+		
 		switch(op) {
-			case 1: printf("opção 1\n"); break;
-			case 2: printf("opção 2\n"); break;
+			case 1: {
+				printf("opção 1\n");
+				send(sockfd, message, strlen(message), 0);
+				send(sockfd, end_message, strlen(end_message), 0);
+				break;
+			}
+			case 2: {
+				printf("opção 2\n");
+				send(sockfd, message, strlen(message), 0);
+				send(sockfd, end_message, strlen(end_message), 0);
+				break;
+			}
 			case 3: printf("opção 3\n"); break;
 			case 4: printf("opção 4\n"); break;
 			case 5: printf("opção 5\n"); break;

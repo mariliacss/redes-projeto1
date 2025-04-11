@@ -29,7 +29,7 @@ void *get_in_addr(struct sockaddr *sa) {
 
 // read input from console and send to server
 // keep waiting until the user exit
-void readInputAndSend(int sockfd) {
+void read_input_and_send(int sockfd) {
 	char *input = NULL;
     size_t inputSize= 0;
 
@@ -54,6 +54,8 @@ void readInputAndSend(int sockfd) {
                 break;
 
             ssize_t amountWasSent =  send(sockfd, input, charCount, 0);
+
+			if (amountWasSent == -1) perror("send");
         }
     }
 }
@@ -106,7 +108,7 @@ int main(int argc, char *argv[]) {
 
 	freeaddrinfo(servinfo); // all done with this structure
 
-	readInputAndSend(sockfd);
+	read_input_and_send(sockfd);
 
 	close(sockfd);
 
