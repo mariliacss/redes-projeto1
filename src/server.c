@@ -45,6 +45,24 @@ void *get_in_addr(struct sockaddr *sa)
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
+int sendall(int s, char *buf, int *len)
+{
+    int total = 0;        // how many bytes we've sent
+    int bytesleft = *len; // how many we have left to send
+    int n;
+
+    while(total < *len) {
+        n = send(s, buf+total, bytesleft, 0);
+        if (n == -1) { break; }
+        total += n;
+        bytesleft -= n;
+    }
+
+    *len = total; // return number actually sent here
+
+    return n==-1?-1:0; // return -1 on failure, 0 on success
+} 
+
 // read response from client and keep wating until user exits
 void read_response(int sockfd) {
 	char buf[MAXDATASIZE];
@@ -66,21 +84,27 @@ void read_response(int sockfd) {
 
 		int op = atoi(buf);
 		char *message;
-		char *end_message = "END\n";
+		int len;
 
 		sprintf(message, "Opção %s escolhida", buf);
-		
+
+		len = strlen(message);
+
 		switch(op) {
 			case 1: {
 				printf("opção 1\n");
-				send(sockfd, message, strlen(message), 0);
-				send(sockfd, end_message, strlen(end_message), 0);
+				if (sendall(sockfd, message, &len)) {
+					perror("sendall");
+					printf("We only sent %d bytes because of the error!\n", len);
+				} 
 				break;
 			}
 			case 2: {
 				printf("opção 2\n");
-				send(sockfd, message, strlen(message), 0);
-				send(sockfd, end_message, strlen(end_message), 0);
+				if (sendall(sockfd, message, &len)) {
+					perror("sendall");
+					printf("We only sent %d bytes because of the error!\n", len);
+				} 
 				break;
 			}
 			case 3: printf("opção 3\n"); break;
