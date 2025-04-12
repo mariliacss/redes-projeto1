@@ -90,44 +90,69 @@ int receive_message(int sockfd, char *buffer, size_t buffer_size) {
     return 0;
 }
 
+// Función para enviar resultados al cliente
+void send_result(int client_sock, sqlite3 *db, const char *sql) {
+    sqlite3_stmt *stmt;
+    char buffer[MAXDATASIZE];
+	int result_found = 0;
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        snprintf(buffer, MAXDATASIZE, "Error SQL: %s\n", sqlite3_errmsg(db));
+        send_message(client_sock, buffer);
+        return;
+    }
+
+    int cols = sqlite3_column_count(stmt);
+
+    // Enviar filas de datos
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+		result_found = 1;
+        buffer[0] = '\0';
+        for (int i = 0; i < cols; i++) {
+            const char *valor = (const char *)sqlite3_column_text(stmt, i);
+            strcat(buffer, valor ? valor : "NULL");
+            if (i < cols - 1) strcat(buffer, ",");
+        }
+		printf("%s\n", buffer);
+		send_message(client_sock, buffer);
+    }
+
+	if (result_found == 0) send_message(client_sock, "Nenhum resultado encontrado");
+	
+    sqlite3_finalize(stmt);
+}
+
 // read response from client and keep wating until user exits
-void read_response(int sockfd, sqlite3 *db) {
+void read_response(int client_sock, sqlite3 *db) {
 	char buf[MAXDATASIZE];
 
     while(1) {
-		if (receive_message(sockfd, buf, sizeof(buf)) == 0) {
+		if (receive_message(client_sock, buf, sizeof(buf)) == 0) {
             printf("Recebido do cliente: %s\n", buf);
+			int op = atoi(buf);
 
-            // Echo ou resposta
-            send_message(sockfd, "Mensagem recebida!");
+			switch(op) {
+				case 5: {
+					printf("opção 5: listar todos os filmes\n");
+					send_message(client_sock, "opção 5: listar todos os filmes");
+					send_result(client_sock, db, "SELECT * FROM movies");
+					break;
+				}
+				default: {
+					printf("opção inexistente\n");
+					send_message(client_sock, "opção inexistente");
+					break;
+				}
+			}
+			// avisar para o cliente que todas mensagens foram enviadas
+			send_message(client_sock, "__END__");
         } else {
             printf("Cliente desconectado ou erro.\n");
             break;
         }
-
-		// int op = atoi(buf);
-		// char *message;
-		// int len;
-
-		// sprintf(message, "Opção %s escolhida\n", buf);
-
-		// len = strlen(message);
-
-		// switch(op) {
-		// 	case 5: {
-		// 		printf("opção 5: listar todos os filmes\n");
-		// 		// send_result(sockfd, db, "SELECT * FROM genres");
-		// 		// if (sendall(sockfd, message, &len)) {
-		// 		// 	perror("sendall");
-		// 		// 	printf("We only sent %d bytes because of the error!\n", len);
-		// 		// } 
-		// 		break;
-		// 	}
-		// 	default: printf("opção inexistente\n"); break;
-		// }
     }
 
-	close(sockfd); // closing client socket
+	close(client_sock); // closing client socket
     exit(0); // closing child process
 }
 

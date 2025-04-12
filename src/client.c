@@ -16,7 +16,7 @@
 
 #define PORT "3490" // the port client will be connecting to 
 
-#define MAXDATASIZE 1024 // max number of bytes we can get at once 
+#define MAXDATASIZE 256 // max number of bytes we can get at once 
 
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa) {
@@ -101,12 +101,13 @@ void read_input_and_send(int sockfd) {
 			send_message(sockfd, input);
         }
 
-		if (receive_message(sockfd, buf, sizeof(buf)) == 0) {
-            printf("Servidor respondeu: %s\n", buf);
-        } else {
-            printf("Erro ou desconexão do servidor.\n");
-            break;
-        }
+		while (1) {
+			if (receive_message(sockfd, buf, sizeof(buf)) != 0) break;
+		
+			if (strcmp(buf, "__END__") == 0) break;
+		
+			printf("%s\n", buf);
+		}
     }
 }
 
