@@ -182,6 +182,26 @@ void read_response(int client_sock, sqlite3 *db) {
 					send_result(client_sock, db, "SELECT movie_id, title FROM movies");
 					break;
 				}
+				case 6: {
+					printf("opção 6: listar todas as informações dos filmes\n");
+					send_message(client_sock, "opção 6: listar todas as informações dos filmes");
+					char *sql = "SELECT\n"
+									"m.movie_id,\n"
+									"m.title,\n"
+									"m.director,\n"
+									"m.year,\n"
+									"GROUP_CONCAT(g.name, ', ') AS genres\n"
+								"FROM\n"
+									"movies m\n"
+								"JOIN\n"
+									"movies_genres mg ON m.movie_id = mg.movie_id\n"
+								"JOIN\n"
+									"genres g ON mg.genre_id = g.genre_id\n"
+								"GROUP BY\n"
+									"m.movie_id;\n";
+					send_result(client_sock, db, sql);
+					break;
+				}
 				default: {
 					printf("opção inexistente\n");
 					send_message(client_sock, "opção inexistente");
