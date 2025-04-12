@@ -75,7 +75,7 @@ int send_message(int sockfd, const char *message) {
     return sent == len + 1 ? 0 : -1;
 }
 
-// Recebe mensagem no mesmo formato
+// recebe mensagem no mesmo formato
 int receive_message(int sockfd, char *buffer, size_t buffer_size) {
     uint8_t len;
     ssize_t received = recv(sockfd, &len, 1, MSG_WAITALL); // Primeiro byte: tamanho
@@ -90,7 +90,7 @@ int receive_message(int sockfd, char *buffer, size_t buffer_size) {
     return 0;
 }
 
-// Función para enviar resultados al cliente
+// envia resultados da query para o cliente
 void send_result(int client_sock, sqlite3 *db, const char *sql) {
     sqlite3_stmt *stmt;
     char buffer[MAXDATASIZE];
@@ -104,7 +104,7 @@ void send_result(int client_sock, sqlite3 *db, const char *sql) {
 
     int cols = sqlite3_column_count(stmt);
 
-    // Enviar filas de datos
+    // enviar filas de dados
     while (sqlite3_step(stmt) == SQLITE_ROW) {
 		result_found = 1;
         buffer[0] = '\0';
@@ -122,6 +122,7 @@ void send_result(int client_sock, sqlite3 *db, const char *sql) {
     sqlite3_finalize(stmt);
 }
 
+// insere os dados na tabela do banco de dados
 void insert_data(char *sql, int client_sock, sqlite3 *db) {
 	char *zErrMsg = 0;
 
@@ -138,13 +139,13 @@ void insert_data(char *sql, int client_sock, sqlite3 *db) {
 	}
 }
 
-// read response from client and keep wating until user exits
+// lê a entrada do cliente e responde de acordo
 void read_response(int client_sock, sqlite3 *db) {
 	char buf[MAXDATASIZE];
 
     while(1) {
 		if (receive_message(client_sock, buf, sizeof(buf)) == 0) {
-            printf("Recebido do cliente: %s\n", buf);
+            printf("recebido do cliente: %s\n", buf);
 			int op = atoi(buf);
 
 			switch(op) {
@@ -162,7 +163,7 @@ void read_response(int client_sock, sqlite3 *db) {
         				sscanf(buf, "%d,%99[^,],%99[^,],%d,%d", &id, titulo, diretor, &genero, &ano);
 
 						char sql[512];
-						snprintf(sql, sizeof(sql),
+						snprintf(sql, sizeof(sql), // TODO: fazer com que o id seja inserido automático
 							"INSERT INTO movies (movie_id,title,director,year) VALUES (%d, '%s', '%s', %d);",
 							id, titulo, diretor, ano);
 							
@@ -176,15 +177,15 @@ void read_response(int client_sock, sqlite3 *db) {
 					}
 					break;
 				}
-				case 5: {
-					printf("opção 5: listar todos os filmes\n");
-					send_message(client_sock, "opção 5: listar todos os filmes");
+				case 4: {
+					printf("opção 4: listar todos os filmes\n");
+					send_message(client_sock, "opção 4: listar todos os filmes");
 					send_result(client_sock, db, "SELECT movie_id, title FROM movies");
 					break;
 				}
-				case 6: {
-					printf("opção 6: listar todas as informações dos filmes\n");
-					send_message(client_sock, "opção 6: listar todas as informações dos filmes");
+				case 5: {
+					printf("opção 5: listar todas as informações dos filmes\n");
+					send_message(client_sock, "opção 5: listar todas as informações dos filmes");
 					char *sql = "SELECT\n"
 									"m.movie_id,\n"
 									"m.title,\n"
@@ -211,13 +212,13 @@ void read_response(int client_sock, sqlite3 *db) {
 			// avisar para o cliente que todas mensagens foram enviadas
 			send_message(client_sock, "__END__");
         } else {
-            printf("Cliente desconectado ou erro.\n");
+            printf("cliente desconectado ou erro.\n");
             break;
         }
     }
 
-	close(client_sock); // closing client socket
-    exit(0); // closing child process
+	close(client_sock); // fechando o socket do cliente
+    exit(0); // fechando o processo filho
 }
 
 void create_tables(sqlite3 *db) {

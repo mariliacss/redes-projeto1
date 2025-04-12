@@ -27,6 +27,7 @@ void *get_in_addr(struct sockaddr *sa) {
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
+// TODO: verificar se vou usar essa função mesmo
 int sendall(int s, char *buf, int *len) {
     int total = 0;        // how many bytes we've sent
     int bytesleft = *len; // how many we have left to send
@@ -44,6 +45,7 @@ int sendall(int s, char *buf, int *len) {
     return n==-1?-1:0; // return -1 on failure, 0 on success
 } 
 
+// formata a mensagem para ser enviada
 int send_message(int sockfd, const char *message) {
     uint8_t len = strlen(message);
     if (len > 255) len = 255;
@@ -56,7 +58,7 @@ int send_message(int sockfd, const char *message) {
     return sent == len + 1 ? 0 : -1;
 }
 
-// Recebe mensagem no mesmo formato
+// recebe mensagem no mesmo formato
 int receive_message(int sockfd, char *buffer, size_t buffer_size) {
     uint8_t len;
     ssize_t received = recv(sockfd, &len, 1, MSG_WAITALL); // Primeiro byte: tamanho
@@ -71,20 +73,18 @@ int receive_message(int sockfd, char *buffer, size_t buffer_size) {
     return 0;
 }
 
-// read input from console and send to server
-// keep waiting until the user exit
+// lê a entrada do console e envia para o servidor e espera a resposta
 void read_input_and_send(int sockfd) {
-    printf("hello, what movie do you want to wacth today? \n");
-	printf("please, type your action and hit enter: \n");
-	printf("1 - insert a movie \n");
-	printf("2 - add a genre to a movie \n");
-	printf("3 - remove a movie \n");
-	printf("4 - insert a movie \n");
-	printf("5 - list all movies \n");
-	printf("6 - list all movies informations \n");
-	printf("7 - list information by movie \n");
-	printf("8 - list all movies from a genre \n");
-	printf("0 - exit \n");
+    printf("｡･:*˚:✧｡ olá, qual filme você viu hoje? ｡･:*˚:✧｡\n\n");
+	printf("digite a opção desejada e aperte enter: \n");
+	printf("1 - inserir um filme \n");
+	printf("2 - adicionar um gênero ao filme \n");
+	printf("3 - remover um filme \n");
+	printf("4 - listar todos os títulos \n");
+	printf("5 - listar informação de todos os filmes \n");
+	printf("6 - listar informação de um filme específico \n");
+	printf("7 - listar todos os filmes de um gênero \n");
+	printf("0 - desconectar \n\n");
 
 	char *input = NULL;
     size_t inputSize= 0;
@@ -97,11 +97,12 @@ void read_input_and_send(int sockfd) {
         if(charCount > 0) {
             if(strcmp(input, "0") == 0)
                 break;
-
+			// envia a entrada lida para o servidor
 			send_message(sockfd, input);
         }
 
 		while (1) {
+			// fica esperando a resposta até receber um __END__
 			if (receive_message(sockfd, buf, sizeof(buf)) != 0) break;
 		
 			if (strcmp(buf, "__END__") == 0) break;
