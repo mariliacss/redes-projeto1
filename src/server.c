@@ -118,8 +118,24 @@ void send_result(int client_sock, sqlite3 *db, const char *sql) {
     }
 
 	if (result_found == 0) send_message(client_sock, "Nenhum resultado encontrado");
-	
+
     sqlite3_finalize(stmt);
+}
+
+void insert_data(char *sql, int client_sock, sqlite3 *db) {
+	char *zErrMsg = 0;
+
+	if (sqlite3_exec(db, sql, NULL, 0, &zErrMsg) != SQLITE_OK) {
+		char error_msg[256];
+        snprintf(error_msg, sizeof(error_msg), "SQL error: %s", zErrMsg);
+		send_message(client_sock, error_msg);
+
+		fprintf(stderr, "SQL error: %s\n", zErrMsg);
+		sqlite3_free(zErrMsg);
+	} else {
+		fprintf(stdout, "%s\n", "dados inseridos com sucesso");
+		send_message(client_sock, "dados inseridos com sucesso");
+	}
 }
 
 // read response from client and keep wating until user exits
@@ -132,10 +148,38 @@ void read_response(int client_sock, sqlite3 *db) {
 			int op = atoi(buf);
 
 			switch(op) {
+				case 1: {
+					printf("opção 1: inserir filme\n");
+					send_message(client_sock, "opção 1: inserir filme");
+					send_message(client_sock, "formato: id,nome do filme,diretor,número do gênero,ano de lançamento");
+					send_message(client_sock, "escolha o gênero a partir da lista a seguir (insira o número)");
+					send_result(client_sock, db, "SELECT * FROM genres");
+					send_message(client_sock, "__END__");
+					if (receive_message(client_sock, buf, sizeof(buf)) == 0) {
+						int id, genero, ano;
+						char titulo[100], diretor[100];
+
+        				sscanf(buf, "%d,%99[^,],%99[^,],%d,%d", &id, titulo, diretor, &genero, &ano);
+
+						char sql[512];
+						snprintf(sql, sizeof(sql),
+							"INSERT INTO movies (movie_id,title,director,year) VALUES (%d, '%s', '%s', %d);",
+							id, titulo, diretor, ano);
+							
+						insert_data(sql, client_sock, db);
+
+						snprintf(sql, sizeof(sql),
+							"INSERT INTO movies_genres (genre_id,movie_id) VALUES (%d, %d);",
+							genero, id);
+
+						insert_data(sql, client_sock, db);
+					}
+					break;
+				}
 				case 5: {
 					printf("opção 5: listar todos os filmes\n");
 					send_message(client_sock, "opção 5: listar todos os filmes");
-					send_result(client_sock, db, "SELECT * FROM movies");
+					send_result(client_sock, db, "SELECT movie_id, title FROM movies");
 					break;
 				}
 				default: {
@@ -190,7 +234,7 @@ void create_tables(sqlite3 *db) {
 
     /* Create SQL statement for movie genre relationship table */
     sql = "CREATE TABLE IF NOT EXISTS movies_genres("
-          "movie_genre_id INT PRIMARY KEY     NOT NULL,"
+          "movie_genre_id INTEGER PRIMARY KEY,"
           "genre_id           INT    NOT NULL,"
           "movie_id        INT NOT NULL,"
           "FOREIGN KEY (genre_id) REFERENCES GENRE(genre_id) ON DELETE CASCADE,"
