@@ -4,7 +4,13 @@ This project implements a movie streaming service using Server-Client architetur
 
 ## How to Run the Code
 
-After cloning the repository, run:
+First you have to have installed or install the following packages:
+
+* CMake
+* SQLite3
+* SQLite3 development package
+
+Then, after cloning the repository, run:
 
 ```sh
  mkdir build
