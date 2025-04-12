@@ -27,12 +27,53 @@ void *get_in_addr(struct sockaddr *sa) {
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
+int sendall(int s, char *buf, int *len) {
+    int total = 0;        // how many bytes we've sent
+    int bytesleft = *len; // how many we have left to send
+    int n;
+
+    while(total < *len) {
+        n = send(s, buf+total, bytesleft, 0);
+        if (n == -1) { break; }
+        total += n;
+        bytesleft -= n;
+    }
+
+    *len = total; // return number actually sent here
+
+    return n==-1?-1:0; // return -1 on failure, 0 on success
+} 
+
+int send_message(int sockfd, const char *message) {
+    uint8_t len = strlen(message);
+    if (len > 255) len = 255;
+
+    uint8_t buffer[256];
+    buffer[0] = len;
+    memcpy(&buffer[1], message, len);
+
+    ssize_t sent = send(sockfd, buffer, len + 1, 0);
+    return sent == len + 1 ? 0 : -1;
+}
+
+// Recebe mensagem no mesmo formato
+int receive_message(int sockfd, char *buffer, size_t buffer_size) {
+    uint8_t len;
+    ssize_t received = recv(sockfd, &len, 1, MSG_WAITALL); // Primeiro byte: tamanho
+    if (received <= 0) return -1;
+
+    if (len >= buffer_size) len = buffer_size - 1;
+
+    received = recv(sockfd, buffer, len, MSG_WAITALL);
+    if (received <= 0) return -1;
+
+    buffer[len] = '\0'; // Null-terminate para facilitar uso como string
+    return 0;
+}
+
 // read input from console and send to server
 // keep waiting until the user exit
 void read_input_and_send(int sockfd) {
-	char *input = NULL;
-    size_t inputSize= 0;
-
     printf("hello, what movie do you want to wacth today? \n");
 	printf("please, type your action and hit enter: \n");
 	printf("1 - insert a movie \n");
@@ -45,6 +86,10 @@ void read_input_and_send(int sockfd) {
 	printf("8 - list all movies from a genre \n");
 	printf("0 - exit \n");
 
+	char *input = NULL;
+    size_t inputSize= 0;
+	char buf[MAXDATASIZE];
+
     while(1) {
         ssize_t  charCount = getline(&input, &inputSize, stdin);
         input[charCount-1] = 0;
@@ -53,9 +98,14 @@ void read_input_and_send(int sockfd) {
             if(strcmp(input, "0") == 0)
                 break;
 
-            ssize_t amountWasSent =  send(sockfd, input, charCount, 0);
+			send_message(sockfd, input);
+        }
 
-			if (amountWasSent == -1) perror("send");
+		if (receive_message(sockfd, buf, sizeof(buf)) == 0) {
+            printf("Servidor respondeu: %s\n", buf);
+        } else {
+            printf("Erro ou desconexão do servidor.\n");
+            break;
         }
     }
 }

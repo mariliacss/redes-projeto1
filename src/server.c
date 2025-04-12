@@ -20,7 +20,7 @@
 
 #define BACKLOG 10	 // how many pending connections queue will hold
 
-#define MAXDATASIZE 1024 // max number of bytes we can get at once 
+#define MAXDATASIZE 256 // max number of bytes we can get at once 
 
 void sigchld_handler(int s)
 {
@@ -45,8 +45,8 @@ void *get_in_addr(struct sockaddr *sa)
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-int sendall(int s, char *buf, int *len)
-{
+// verifica se todos os dados foram realmente enviados e envia se não foram
+int sendall(int s, char *buf, int *len) {
     int total = 0;        // how many bytes we've sent
     int bytesleft = *len; // how many we have left to send
     int n;
@@ -63,58 +63,68 @@ int sendall(int s, char *buf, int *len)
     return n==-1?-1:0; // return -1 on failure, 0 on success
 } 
 
+int send_message(int sockfd, const char *message) {
+    uint8_t len = strlen(message);
+    if (len > 255) len = 255;
+
+    uint8_t buffer[256];
+    buffer[0] = len;
+    memcpy(&buffer[1], message, len);
+
+    ssize_t sent = send(sockfd, buffer, len + 1, 0);
+    return sent == len + 1 ? 0 : -1;
+}
+
+// Recebe mensagem no mesmo formato
+int receive_message(int sockfd, char *buffer, size_t buffer_size) {
+    uint8_t len;
+    ssize_t received = recv(sockfd, &len, 1, MSG_WAITALL); // Primeiro byte: tamanho
+    if (received <= 0) return -1;
+
+    if (len >= buffer_size) len = buffer_size - 1;
+
+    received = recv(sockfd, buffer, len, MSG_WAITALL);
+    if (received <= 0) return -1;
+
+    buffer[len] = '\0'; // Null-terminate para facilitar uso como string
+    return 0;
+}
+
 // read response from client and keep wating until user exits
-void read_response(int sockfd) {
+void read_response(int sockfd, sqlite3 *db) {
 	char buf[MAXDATASIZE];
 
     while(1) {
-		ssize_t amountReceived = recv(sockfd, buf, MAXDATASIZE, 0);
+		if (receive_message(sockfd, buf, sizeof(buf)) == 0) {
+            printf("Recebido do cliente: %s\n", buf);
 
-        if (amountReceived == -1) {
-			perror("recv");
-			exit(1);
-		}
+            // Echo ou resposta
+            send_message(sockfd, "Mensagem recebida!");
+        } else {
+            printf("Cliente desconectado ou erro.\n");
+            break;
+        }
 
-		if (amountReceived == 0) {
-			printf("server: client exited.\n");
-			break;
-		}
+		// int op = atoi(buf);
+		// char *message;
+		// int len;
 
-		buf[amountReceived] = '\0'; // start string from begining
+		// sprintf(message, "Opção %s escolhida\n", buf);
 
-		int op = atoi(buf);
-		char *message;
-		int len;
+		// len = strlen(message);
 
-		sprintf(message, "Opção %s escolhida", buf);
-
-		len = strlen(message);
-
-		switch(op) {
-			case 1: {
-				printf("opção 1\n");
-				if (sendall(sockfd, message, &len)) {
-					perror("sendall");
-					printf("We only sent %d bytes because of the error!\n", len);
-				} 
-				break;
-			}
-			case 2: {
-				printf("opção 2\n");
-				if (sendall(sockfd, message, &len)) {
-					perror("sendall");
-					printf("We only sent %d bytes because of the error!\n", len);
-				} 
-				break;
-			}
-			case 3: printf("opção 3\n"); break;
-			case 4: printf("opção 4\n"); break;
-			case 5: printf("opção 5\n"); break;
-			case 6: printf("opção 6\n"); break;
-			case 7: printf("opção 7\n"); break;
-			case 8: printf("opção 8\n"); break;
-			default: printf("opção inexistente\n"); break;
-		}
+		// switch(op) {
+		// 	case 5: {
+		// 		printf("opção 5: listar todos os filmes\n");
+		// 		// send_result(sockfd, db, "SELECT * FROM genres");
+		// 		// if (sendall(sockfd, message, &len)) {
+		// 		// 	perror("sendall");
+		// 		// 	printf("We only sent %d bytes because of the error!\n", len);
+		// 		// } 
+		// 		break;
+		// 	}
+		// 	default: printf("opção inexistente\n"); break;
+		// }
     }
 
 	close(sockfd); // closing client socket
@@ -297,7 +307,7 @@ int main(void) {
 
 		if (!fork()) { // this is the child process
 			close(sockfd); // child doesn't need the listener
-			read_response(new_fd);
+			read_response(new_fd, db);
 		}
 		close(new_fd);  // parent doesn't need this
 	}
