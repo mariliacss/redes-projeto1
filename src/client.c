@@ -27,24 +27,6 @@ void *get_in_addr(struct sockaddr *sa) {
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-// TODO: verificar se vou usar essa função mesmo
-int sendall(int s, char *buf, int *len) {
-    int total = 0;        // how many bytes we've sent
-    int bytesleft = *len; // how many we have left to send
-    int n;
-
-    while(total < *len) {
-        n = send(s, buf+total, bytesleft, 0);
-        if (n == -1) { break; }
-        total += n;
-        bytesleft -= n;
-    }
-
-    *len = total; // return number actually sent here
-
-    return n==-1?-1:0; // return -1 on failure, 0 on success
-} 
-
 // formata a mensagem para ser enviada
 int send_message(int sockfd, const char *message) {
     uint8_t len = strlen(message);
@@ -61,7 +43,7 @@ int send_message(int sockfd, const char *message) {
 // recebe mensagem no mesmo formato
 int receive_message(int sockfd, char *buffer, size_t buffer_size) {
     uint8_t len;
-    ssize_t received = recv(sockfd, &len, 1, MSG_WAITALL); // Primeiro byte: tamanho
+    ssize_t received = recv(sockfd, &len, 1, MSG_WAITALL);
     if (received <= 0) return -1;
 
     if (len >= buffer_size) len = buffer_size - 1;
@@ -69,7 +51,7 @@ int receive_message(int sockfd, char *buffer, size_t buffer_size) {
     received = recv(sockfd, buffer, len, MSG_WAITALL);
     if (received <= 0) return -1;
 
-    buffer[len] = '\0'; // Null-terminate para facilitar uso como string
+    buffer[len] = '\0';
     return 0;
 }
 
@@ -84,6 +66,7 @@ void read_input_and_send(int sockfd) {
 	printf("5 - listar informação de todos os filmes \n");
 	printf("6 - listar informação de um filme específico \n");
 	printf("7 - listar todos os filmes de um gênero \n");
+	printf("8 - menu de opções \n");
 	printf("0 - desconectar \n\n");
 
 	char *input = NULL;

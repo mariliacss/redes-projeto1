@@ -45,24 +45,7 @@ void *get_in_addr(struct sockaddr *sa)
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-// verifica se todos os dados foram realmente enviados e envia se não foram
-int sendall(int s, char *buf, int *len) {
-    int total = 0;        // how many bytes we've sent
-    int bytesleft = *len; // how many we have left to send
-    int n;
-
-    while(total < *len) {
-        n = send(s, buf+total, bytesleft, 0);
-        if (n == -1) { break; }
-        total += n;
-        bytesleft -= n;
-    }
-
-    *len = total; // return number actually sent here
-
-    return n==-1?-1:0; // return -1 on failure, 0 on success
-} 
-
+// formata a mensagem para ser enviada
 int send_message(int sockfd, const char *message) {
     uint8_t len = strlen(message);
     if (len > 255) len = 255;
@@ -78,7 +61,7 @@ int send_message(int sockfd, const char *message) {
 // recebe mensagem no mesmo formato
 int receive_message(int sockfd, char *buffer, size_t buffer_size) {
     uint8_t len;
-    ssize_t received = recv(sockfd, &len, 1, MSG_WAITALL); // Primeiro byte: tamanho
+    ssize_t received = recv(sockfd, &len, 1, MSG_WAITALL);
     if (received <= 0) return -1;
 
     if (len >= buffer_size) len = buffer_size - 1;
@@ -86,7 +69,7 @@ int receive_message(int sockfd, char *buffer, size_t buffer_size) {
     received = recv(sockfd, buffer, len, MSG_WAITALL);
     if (received <= 0) return -1;
 
-    buffer[len] = '\0'; // Null-terminate para facilitar uso como string
+    buffer[len] = '\0';
     return 0;
 }
 
@@ -117,12 +100,12 @@ void send_result(int client_sock, sqlite3 *db, const char *sql) {
 		send_message(client_sock, buffer);
     }
 
-	if (result_found == 0) send_message(client_sock, "Nenhum resultado encontrado");
+	if (result_found == 0) send_message(client_sock, "nenhum resultado encontrado\n");
 
     sqlite3_finalize(stmt);
 }
 
-// insere os dados na tabela do banco de dados
+// insere ou remove dados na tabela do banco de dados
 void insert_remove_data(char *sql, int client_sock, sqlite3 *db) {
 	char *zErrMsg = 0;
 
@@ -135,11 +118,12 @@ void insert_remove_data(char *sql, int client_sock, sqlite3 *db) {
 		sqlite3_free(zErrMsg);
 	} else {
 		fprintf(stdout, "%s\n", "operação realizada com sucesso!");
-		send_message(client_sock, "operação realizada com sucesso!");
+		send_message(client_sock, "operação realizada com sucesso!\n");
 	}
 }
 
-char *get_result(int client_sock, sqlite3 *db, const char *sql) {
+// retorna o id para querys que precisam do id
+char *get_id(int client_sock, sqlite3 *db, const char *sql) {
     sqlite3_stmt *stmt;
     char buffer[MAXDATASIZE];
 	char *id_str = NULL;
@@ -161,8 +145,8 @@ char *get_result(int client_sock, sqlite3 *db, const char *sql) {
             if (i < cols - 1) strcat(buffer, ",");
         }
 		printf("%s\n", buffer);
-		// Aloca espaço para o ID em string
-        id_str = malloc(12); // suficiente para um int + null terminator
+		
+        id_str = malloc(12);
         if (id_str != NULL) {
             snprintf(id_str, sizeof(buffer), "%s", buffer);
         }
@@ -185,28 +169,31 @@ void read_response(int client_sock, sqlite3 *db) {
 				case 1: {
 					printf("--- opção 1: cadastrar um filme ---\n\n");
 					send_message(client_sock, "--- opção 1: cadastrar um filme ---\n");
-					send_message(client_sock, "formato: id,nome do filme,diretor,número do gênero,ano de lançamento");
+					send_message(client_sock, "digite as informações desejadas da seguinte forma: nome do filme,diretor,número do gênero,ano de lançamento");
 					send_message(client_sock, "escolha o gênero a partir da lista a seguir (insira o número)");
 					send_result(client_sock, db, "SELECT * FROM genres");
 					send_message(client_sock, "__END__");
 					if (receive_message(client_sock, buf, sizeof(buf)) == 0) {
-						int id, genre, year;
-						char title[100], director[100];
+						int genre_id, year;
+						char *movie_id, title[100], director[100], sql[512];
 
-        				sscanf(buf, "%d,%99[^,],%99[^,],%d,%d", &id, title, director, &genre, &year);
-
-						char sql[512];
-						snprintf(sql, sizeof(sql), // TODO: fazer com que o id seja inserido automático
-							"INSERT INTO movies (movie_id,title,director,year) VALUES (%d, '%s', '%s', %d);",
-							id, title, director, year);
+        				sscanf(buf, "%99[^,],%99[^,],%d,%d", title, director, &genre_id, &year);
+						snprintf(sql, sizeof(sql), "INSERT INTO movies (title,director,year) VALUES ('%s', '%s', %d);", title, director, year);
 							
 						insert_remove_data(sql, client_sock, db);
 
-						snprintf(sql, sizeof(sql),
-							"INSERT INTO movies_genres (genre_id,movie_id) VALUES (%d, %d);",
-							genre, id);
+						snprintf(sql, sizeof(sql), "SELECT movie_id FROM movies WHERE title LIKE '%%%s%%';", title);
+						movie_id = get_id(client_sock, db, sql);
 
-						insert_remove_data(sql, client_sock, db);
+						if (movie_id != NULL) {
+							snprintf(sql, sizeof(sql), "INSERT INTO movies_genres (genre_id,movie_id) VALUES (%d, %s);", genre_id, movie_id);
+							insert_remove_data(sql, client_sock, db);
+						}
+
+						free(movie_id);
+					} else {
+						printf("cliente desconectado ou erro.\n");
+						break;
 					}
 					break;
 				}
@@ -229,6 +216,9 @@ void read_response(int client_sock, sqlite3 *db) {
 							genre_id, movie_id);
 
 						insert_remove_data(sql, client_sock, db);
+					} else {
+						printf("cliente desconectado ou erro.\n");
+						break;
 					}
 					break;
 				}
@@ -238,26 +228,28 @@ void read_response(int client_sock, sqlite3 *db) {
 					send_message(client_sock, "digite o nome do filme:");
 					send_message(client_sock, "__END__");
 					if (receive_message(client_sock, buf, sizeof(buf)) == 0) {
-						char sql[512], *id, msg[256];
+						char sql[512], *movie_id, msg[256];
 
-						snprintf(sql, sizeof(sql),
-							"SELECT movie_id FROM movies WHERE title LIKE '%%%s%%';",buf);
+						snprintf(sql, sizeof(sql), "SELECT movie_id FROM movies WHERE title LIKE '%%%s%%';",buf);
 
-						id = get_result(client_sock, db, sql);
+						movie_id = get_id(client_sock, db, sql);
 
-						if (id != NULL) {
-        					snprintf(msg, sizeof(msg), "filme encontrado: %s\n", id);
+						if (movie_id != NULL) {
+        					snprintf(msg, sizeof(msg), "filme encontrado: identificador = %s\n", movie_id);
 							printf("%s", msg);
 							send_message(client_sock, msg);
 
-							snprintf(sql, sizeof(sql), "DELETE FROM movies WHERE movie_id = %s;",id);
+							snprintf(sql, sizeof(sql), "DELETE FROM movies WHERE movie_id = %s;", movie_id);
 							insert_remove_data(sql, client_sock, db);
 						} else {
 							printf("filme não encontrado.\n");
 							send_message(client_sock, "filme não encontrado.\n");
 						}
 
-						free(id);
+						free(movie_id);
+					} else {
+						printf("cliente desconectado ou erro.\n");
+						break;
 					}
 					break;
 				}
@@ -297,9 +289,18 @@ void read_response(int client_sock, sqlite3 *db) {
 						char sql[512];
 
         				sscanf(buf, "%d", &movie_id);
-						snprintf(sql, sizeof(sql), "SELECT * FROM movies WHERE movie_id = %d;", movie_id);
+						snprintf(sql, sizeof(sql), 
+							"SELECT m.movie_id, m.title, m.director, m.year, GROUP_CONCAT(g.name, ', ') AS genres\n"
+							"FROM movies m\n"
+							"JOIN movies_genres mg ON m.movie_id = mg.movie_id\n"
+							"JOIN genres g ON g.genre_id = mg.genre_id\n"
+							"WHERE m.movie_id = %d\n"
+							"GROUP BY m.movie_id, m.title, m.director, m.year;", movie_id);
 
 						send_result(client_sock, db, sql);
+					}  else {
+						printf("cliente desconectado ou erro.\n");
+						break;
 					}
 					break;
 				}
@@ -314,10 +315,33 @@ void read_response(int client_sock, sqlite3 *db) {
 						char sql[512];
 
         				sscanf(buf, "%d", &genre_id);
-						snprintf(sql, sizeof(sql), "SELECT m.movie_id, m.title FROM movies m JOIN movies_genres mg ON m.movie_id = mg.movie_id JOIN genres g ON mg.genre_id = g.genre_id WHERE g.genre_id = %d ORDER BY m.title;", genre_id);
+						snprintf(sql, sizeof(sql),
+							"SELECT m.movie_id, m.title\n"
+							"FROM movies m\n"
+							"JOIN movies_genres mg ON m.movie_id = mg.movie_id\n"
+							"JOIN genres g ON mg.genre_id = g.genre_id\n"
+							"WHERE g.genre_id = %d\n"
+							"ORDER BY m.title;", genre_id);
 
 						send_result(client_sock, db, sql);
+					} else {
+						printf("cliente desconectado ou erro.\n");
+						break;
 					}
+					break;
+				}
+				case 8: {
+					send_message(client_sock, "--- opção 8: menu de opções ---\n");
+					send_message(client_sock, "digite a opção desejada e aperte enter: \n");
+					send_message(client_sock, "1 - cadastrar um filme");
+					send_message(client_sock, "2 - adicionar um gênero ao filme");
+					send_message(client_sock, "3 - remover um filme");
+					send_message(client_sock, "4 - listar todos os títulos");
+					send_message(client_sock, "5 - listar informação de todos os filmes");
+					send_message(client_sock, "6 - listar informação de um filme específico");
+					send_message(client_sock, "7 - listar todos os filmes de um gênero");
+					send_message(client_sock, "8 - menu de opções \n");
+					send_message(client_sock, "0 - desconectar \n");
 					break;
 				}
 				default: {
@@ -338,6 +362,7 @@ void read_response(int client_sock, sqlite3 *db) {
     exit(0); // fechando o processo filho
 }
 
+// crias as tebelas necessárias para o banco de dados
 void create_tables(sqlite3 *db) {
     char *zErrMsg = 0;
     char *sql;
@@ -357,7 +382,7 @@ void create_tables(sqlite3 *db) {
 
     /* Create SQL statement for movie table */
     sql = "CREATE TABLE IF NOT EXISTS movies("
-          "movie_id INT PRIMARY KEY     NOT NULL,"
+          "movie_id INTEGER PRIMARY KEY,"
           "title           TEXT    NOT NULL,"
           "director        TEXT NOT NULL,"
           "year         INT NOT NULL );";
@@ -440,7 +465,7 @@ int main(void) {
         fprintf(stderr, "Opened database successfully\n");
     }
 
-	// criando tabelas e inserindo dados de Gênero caso não existam
+	// criando tabelas e inserindo dados de gênero caso não existam
 	create_tables(db);
 	insert_genres(db);
 
