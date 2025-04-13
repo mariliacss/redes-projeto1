@@ -123,7 +123,7 @@ void send_result(int client_sock, sqlite3 *db, const char *sql) {
 }
 
 // insere os dados na tabela do banco de dados
-void insert_data(char *sql, int client_sock, sqlite3 *db) {
+void insert_remove_data(char *sql, int client_sock, sqlite3 *db) {
 	char *zErrMsg = 0;
 
 	if (sqlite3_exec(db, sql, NULL, 0, &zErrMsg) != SQLITE_OK) {
@@ -134,9 +134,42 @@ void insert_data(char *sql, int client_sock, sqlite3 *db) {
 		fprintf(stderr, "SQL error: %s\n", zErrMsg);
 		sqlite3_free(zErrMsg);
 	} else {
-		fprintf(stdout, "%s\n", "dados inseridos com sucesso");
-		send_message(client_sock, "dados inseridos com sucesso");
+		fprintf(stdout, "%s\n", "operação realizada com sucesso!");
+		send_message(client_sock, "operação realizada com sucesso!");
 	}
+}
+
+char *get_result(int client_sock, sqlite3 *db, const char *sql) {
+    sqlite3_stmt *stmt;
+    char buffer[MAXDATASIZE];
+	char *id_str = NULL;
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        snprintf(buffer, MAXDATASIZE, "Error SQL: %s\n", sqlite3_errmsg(db));
+		send_message(client_sock, buffer);
+        return NULL;
+    }
+
+    int cols = sqlite3_column_count(stmt);
+
+    // enviar filas de dados
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        buffer[0] = '\0';
+        for (int i = 0; i < cols; i++) {
+            const char *valor = (const char *)sqlite3_column_text(stmt, i);
+            strcat(buffer, valor ? valor : "NULL");
+            if (i < cols - 1) strcat(buffer, ",");
+        }
+		printf("%s\n", buffer);
+		// Aloca espaço para o ID em string
+        id_str = malloc(12); // suficiente para um int + null terminator
+        if (id_str != NULL) {
+            snprintf(id_str, sizeof(buffer), "%s", buffer);
+        }
+    }
+
+    sqlite3_finalize(stmt);
+	return id_str;
 }
 
 // lê a entrada do cliente e responde de acordo
@@ -150,42 +183,93 @@ void read_response(int client_sock, sqlite3 *db) {
 
 			switch(op) {
 				case 1: {
-					printf("opção 1: inserir filme\n");
-					send_message(client_sock, "opção 1: inserir filme");
+					printf("--- opção 1: cadastrar um filme ---\n\n");
+					send_message(client_sock, "--- opção 1: cadastrar um filme ---\n");
 					send_message(client_sock, "formato: id,nome do filme,diretor,número do gênero,ano de lançamento");
 					send_message(client_sock, "escolha o gênero a partir da lista a seguir (insira o número)");
 					send_result(client_sock, db, "SELECT * FROM genres");
 					send_message(client_sock, "__END__");
 					if (receive_message(client_sock, buf, sizeof(buf)) == 0) {
-						int id, genero, ano;
-						char titulo[100], diretor[100];
+						int id, genre, year;
+						char title[100], director[100];
 
-        				sscanf(buf, "%d,%99[^,],%99[^,],%d,%d", &id, titulo, diretor, &genero, &ano);
+        				sscanf(buf, "%d,%99[^,],%99[^,],%d,%d", &id, title, director, &genre, &year);
 
 						char sql[512];
 						snprintf(sql, sizeof(sql), // TODO: fazer com que o id seja inserido automático
 							"INSERT INTO movies (movie_id,title,director,year) VALUES (%d, '%s', '%s', %d);",
-							id, titulo, diretor, ano);
+							id, title, director, year);
 							
-						insert_data(sql, client_sock, db);
+						insert_remove_data(sql, client_sock, db);
 
 						snprintf(sql, sizeof(sql),
 							"INSERT INTO movies_genres (genre_id,movie_id) VALUES (%d, %d);",
-							genero, id);
+							genre, id);
 
-						insert_data(sql, client_sock, db);
+						insert_remove_data(sql, client_sock, db);
+					}
+					break;
+				}
+				case 2: {
+					printf("--- opção 2: adicionar um gênero ao filme ---\n\n");
+					send_message(client_sock, "--- opção 2: adicionar um gênero ao filme ---\n");
+					send_message(client_sock, "insira o número do gênero escolhido e o número do filme que você deseja inserir");
+					send_message(client_sock, "formato: número do gênero,número do filme\n");
+					send_result(client_sock, db, "SELECT * FROM genres");
+					send_message(client_sock, "\n");
+					send_result(client_sock, db, "SELECT movie_id, title FROM movies");
+					send_message(client_sock, "__END__");
+					if (receive_message(client_sock, buf, sizeof(buf)) == 0) {
+						int genre_id, movie_id;
+						char sql[512];
+
+        				sscanf(buf, "%d,%d", &genre_id, &movie_id);
+						snprintf(sql, sizeof(sql),
+							"INSERT INTO movies_genres (genre_id,movie_id) VALUES (%d, %d);",
+							genre_id, movie_id);
+
+						insert_remove_data(sql, client_sock, db);
+					}
+					break;
+				}
+				case 3: {
+					printf("--- opção 3: remover um filme ---\n\n");
+					send_message(client_sock, "--- opção 3: remover um filme ---\n");
+					send_message(client_sock, "digite o nome do filme:");
+					send_message(client_sock, "__END__");
+					if (receive_message(client_sock, buf, sizeof(buf)) == 0) {
+						char sql[512], *id, msg[256];
+
+						snprintf(sql, sizeof(sql),
+							"SELECT movie_id FROM movies WHERE title LIKE '%%%s%%';",buf);
+
+						id = get_result(client_sock, db, sql);
+
+						if (id != NULL) {
+        					snprintf(msg, sizeof(msg), "filme encontrado: %s\n", id);
+							printf("%s", msg);
+							send_message(client_sock, msg);
+
+							snprintf(sql, sizeof(sql), "DELETE FROM movies WHERE movie_id = %s;",id);
+							insert_remove_data(sql, client_sock, db);
+						} else {
+							printf("filme não encontrado.\n");
+							send_message(client_sock, "filme não encontrado.\n");
+						}
+
+						free(id);
 					}
 					break;
 				}
 				case 4: {
-					printf("opção 4: listar todos os filmes\n");
-					send_message(client_sock, "opção 4: listar todos os filmes");
+					printf("--- opção 4: listar todos os títulos ---\n\n");
+					send_message(client_sock, "--- opção 4: listar todos os títulos ---\n");
 					send_result(client_sock, db, "SELECT movie_id, title FROM movies");
 					break;
 				}
 				case 5: {
-					printf("opção 5: listar todas as informações dos filmes\n");
-					send_message(client_sock, "opção 5: listar todas as informações dos filmes");
+					printf("--- opção 5: listar todas as informações dos filmes ---\n\n");
+					send_message(client_sock, "--- opção 5: listar todas as informações dos filmes ---\n");
 					char *sql = "SELECT\n"
 									"m.movie_id,\n"
 									"m.title,\n"
@@ -203,9 +287,42 @@ void read_response(int client_sock, sqlite3 *db) {
 					send_result(client_sock, db, sql);
 					break;
 				}
+				case 6: { 
+					printf("--- opção 6: listar informação de um filme específico ---\n");
+					send_message(client_sock, "--- opção 6: listar informação de um filme específico ---\n");
+					send_message(client_sock, "digite o identificador do filme:");
+					send_message(client_sock, "__END__");
+					if (receive_message(client_sock, buf, sizeof(buf)) == 0) {
+						int movie_id;
+						char sql[512];
+
+        				sscanf(buf, "%d", &movie_id);
+						snprintf(sql, sizeof(sql), "SELECT * FROM movies WHERE movie_id = %d;", movie_id);
+
+						send_result(client_sock, db, sql);
+					}
+					break;
+				}
+				case 7: {
+					printf("--- opção 7: listar todos os filmes de um gênero ---\n");
+					send_message(client_sock, "--- opção 7: listar todos os filmes de um gênero ---\n");
+					send_result(client_sock, db, "SELECT * FROM genres");
+					send_message(client_sock, "digite o identificador do gênero desejado:");
+					send_message(client_sock, "__END__");
+					if (receive_message(client_sock, buf, sizeof(buf)) == 0) {
+						int genre_id;
+						char sql[512];
+
+        				sscanf(buf, "%d", &genre_id);
+						snprintf(sql, sizeof(sql), "SELECT m.movie_id, m.title FROM movies m JOIN movies_genres mg ON m.movie_id = mg.movie_id JOIN genres g ON mg.genre_id = g.genre_id WHERE g.genre_id = %d ORDER BY m.title;", genre_id);
+
+						send_result(client_sock, db, sql);
+					}
+					break;
+				}
 				default: {
 					printf("opção inexistente\n");
-					send_message(client_sock, "opção inexistente");
+					send_message(client_sock, "--- opção inexistente ---\n");
 					break;
 				}
 			}

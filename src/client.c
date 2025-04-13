@@ -77,7 +77,7 @@ int receive_message(int sockfd, char *buffer, size_t buffer_size) {
 void read_input_and_send(int sockfd) {
     printf("｡･:*˚:✧｡ olá, qual filme você viu hoje? ｡･:*˚:✧｡\n\n");
 	printf("digite a opção desejada e aperte enter: \n");
-	printf("1 - inserir um filme \n");
+	printf("1 - cadastrar um filme \n");
 	printf("2 - adicionar um gênero ao filme \n");
 	printf("3 - remover um filme \n");
 	printf("4 - listar todos os títulos \n");
