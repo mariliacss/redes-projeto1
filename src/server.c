@@ -267,7 +267,7 @@ void read_response(int client_sock, sqlite3 *db) {
 									"m.title,\n"
 									"m.director,\n"
 									"m.year,\n"
-									"GROUP_CONCAT(g.name, ', ') AS genres\n"
+									"GROUP_CONCAT(g.name, ',') AS genres\n"
 								"FROM\n"
 									"movies m\n"
 								"JOIN\n"
@@ -290,7 +290,7 @@ void read_response(int client_sock, sqlite3 *db) {
 
         				sscanf(buf, "%d", &movie_id);
 						snprintf(sql, sizeof(sql), 
-							"SELECT m.movie_id, m.title, m.director, m.year, GROUP_CONCAT(g.name, ', ') AS genres\n"
+							"SELECT m.movie_id, m.title, m.director, m.year, GROUP_CONCAT(g.name, ',') AS genres\n"
 							"FROM movies m\n"
 							"JOIN movies_genres mg ON m.movie_id = mg.movie_id\n"
 							"JOIN genres g ON g.genre_id = mg.genre_id\n"
@@ -340,7 +340,7 @@ void read_response(int client_sock, sqlite3 *db) {
 					send_message(client_sock, "5 - listar informação de todos os filmes");
 					send_message(client_sock, "6 - listar informação de um filme específico");
 					send_message(client_sock, "7 - listar todos os filmes de um gênero");
-					send_message(client_sock, "8 - menu de opções \n");
+					send_message(client_sock, "8 - menu de opções");
 					send_message(client_sock, "0 - desconectar \n");
 					break;
 				}
@@ -446,6 +446,24 @@ void insert_genres(sqlite3 *db) {
     }
 }
 
+// criando o banco e as tabelas caso não tenham sido criados
+void setup_database() {
+	sqlite3 *db;
+
+	// conectando com o banco de dados
+	if (sqlite3_open("streaming.db", &db) != SQLITE_OK) {
+        fprintf(stderr, "Error open database: %s\n", sqlite3_errmsg(db));
+    } else {
+        fprintf(stderr, "Opened database successfully\n");
+    }
+
+	// criando tabelas e inserindo dados de gênero caso não existam
+	create_tables(db);
+	insert_genres(db);
+
+	sqlite3_close(db);
+}
+
 int main(void) {
 	int sockfd, new_fd;  // listen on sock_fd, new connection on new_fd
 	struct addrinfo hints, *servinfo, *p;
@@ -455,19 +473,8 @@ int main(void) {
 	int yes=1;
 	char s[INET6_ADDRSTRLEN];
 	int rv;
-	sqlite3 *db;
 
-	// conectando com o banco de dados
-	if (sqlite3_open("streaming.db", &db) != SQLITE_OK) {
-        fprintf(stderr, "Error open database: %s\n", sqlite3_errmsg(db));
-        return 1;
-    } else {
-        fprintf(stderr, "Opened database successfully\n");
-    }
-
-	// criando tabelas e inserindo dados de gênero caso não existam
-	create_tables(db);
-	insert_genres(db);
+	setup_database();
 
 	memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_UNSPEC;
@@ -538,13 +545,16 @@ int main(void) {
 		printf("server: got connection from %s\n", s);
 
 		if (!fork()) { // this is the child process
+			sqlite3 *db;
+
 			close(sockfd); // child doesn't need the listener
+
+			sqlite3_open("streaming.db", &db); // abrindo conexão exclusiva para o processo filho
 			read_response(new_fd, db);
+			sqlite3_close(db);
 		}
 		close(new_fd);  // parent doesn't need this
 	}
-
-	sqlite3_close(db);
 
 	return 0;
 }
