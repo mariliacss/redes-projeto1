@@ -63,8 +63,8 @@ void read_input_and_send(int sockfd) {
 	printf("2 - adicionar um gênero ao filme \n");
 	printf("3 - remover um filme \n");
 	printf("4 - listar todos os títulos \n");
-	printf("5 - listar informação de todos os filmes \n");
-	printf("6 - listar informação de um filme específico \n");
+	printf("5 - listar todas as informações dos filmes \n");
+	printf("6 - listar informações de um filme específico \n");
 	printf("7 - listar todos os filmes de um gênero \n");
 	printf("8 - menu de opções \n");
 	printf("0 - desconectar \n\n");

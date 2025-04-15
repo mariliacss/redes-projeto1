@@ -280,7 +280,7 @@ void read_response(int client_sock, sqlite3 *db) {
 					break;
 				}
 				case 6: { 
-					printf("--- opção 6: listar informação de um filme específico ---\n");
+					printf("--- opção 6: listar informações de um filme específico ---\n");
 					send_message(client_sock, "--- opção 6: listar informação de um filme específico ---\n");
 					send_message(client_sock, "digite o identificador do filme:");
 					send_message(client_sock, "__END__");
@@ -308,7 +308,7 @@ void read_response(int client_sock, sqlite3 *db) {
 					printf("--- opção 7: listar todos os filmes de um gênero ---\n");
 					send_message(client_sock, "--- opção 7: listar todos os filmes de um gênero ---\n");
 					send_result(client_sock, db, "SELECT * FROM genres");
-					send_message(client_sock, "digite o identificador do gênero desejado:");
+					send_message(client_sock, "\ndigite o identificador do gênero desejado:");
 					send_message(client_sock, "__END__");
 					if (receive_message(client_sock, buf, sizeof(buf)) == 0) {
 						int genre_id;
@@ -400,8 +400,10 @@ void create_tables(sqlite3 *db) {
           "movie_genre_id INTEGER PRIMARY KEY,"
           "genre_id           INT    NOT NULL,"
           "movie_id        INT NOT NULL,"
-          "FOREIGN KEY (genre_id) REFERENCES GENRE(genre_id) ON DELETE CASCADE,"
-          "FOREIGN KEY (movie_id) REFERENCES MOVIE(movie_id) ON DELETE CASCADE );";
+          "FOREIGN KEY (genre_id) REFERENCES genres(genre_id) ON DELETE CASCADE,"
+          "FOREIGN KEY (movie_id) REFERENCES movies(movie_id) ON DELETE CASCADE,"
+		  "UNIQUE (movie_id, genre_id)"
+		  ");";
 
     /* Execute SQL statement */
     if (sqlite3_exec(db, sql, NULL, 0, &zErrMsg) != SQLITE_OK) {
@@ -550,6 +552,7 @@ int main(void) {
 			close(sockfd); // child doesn't need the listener
 
 			sqlite3_open("streaming.db", &db); // abrindo conexão exclusiva para o processo filho
+			sqlite3_exec(db, "PRAGMA foreign_keys = ON;", 0, 0, 0); // habilitando remoção em cascata
 			read_response(new_fd, db);
 			sqlite3_close(db);
 		}
