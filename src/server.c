@@ -73,7 +73,7 @@ int receive_message(int sockfd, char *buffer, size_t buffer_size) {
     return 0;
 }
 
-// envia resultados da query para o cliente
+// envia resultados da query para o cliente (código dessa função adaptado do código fornecido pelo monitor)
 void send_result(int client_sock, sqlite3 *db, const char *sql) {
     sqlite3_stmt *stmt;
     char buffer[MAXDATASIZE];
